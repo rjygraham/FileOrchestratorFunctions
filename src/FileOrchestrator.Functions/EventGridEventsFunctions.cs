@@ -1,32 +1,35 @@
+// Default URL for triggering event grid function in the local environment.
+// http://localhost:7071/runtime/webhooks/EventGrid?functionName={functionname}
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+using Microsoft.Azure.WebJobs.Host;
+using Microsoft.Azure.EventGrid.Models;
+using Microsoft.Azure.WebJobs.Extensions.EventGrid;
 using Microsoft.Extensions.Logging;
-using Microsoft.WindowsAzure.Storage.Blob;
+using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace FileOrchestrator.Functions
 {
-	public class BlobEventsFunctions
+    public class EventGridEventsFunctions
     {
 		private readonly HashSet<string> ignoredFiles;
 
-		public BlobEventsFunctions()
+		public EventGridEventsFunctions()
 		{
 			ignoredFiles = new HashSet<string>(Environment.GetEnvironmentVariable("BlobIgnoreFiles").Split(','));
 		}
 
-        [FunctionName(nameof(HandleBlobEventsFunctionsAsync))]
-        public async Task HandleBlobEventsFunctionsAsync(
-			[BlobTrigger("input/{name}", Connection = "AzureWebJobsStorage")] CloudBlockBlob myBlob,
-			string name,
-			[DurableClient] IDurableClient client,
-			ILogger log
-		)
+        [FunctionName(nameof(HandleEventGridEventsFunctionsAsync))]
+        public async Task HandleEventGridEventsFunctionsAsync([EventGridTrigger]EventGridEvent eventGridEvent,
+		[DurableClient] IDurableClient client,
+			ILogger log)
         {
-			var nameParts = name.Substring(0, name.LastIndexOf('.')).Split('-');
+			var startIndex = eventGridEvent.Subject.LastIndexOf('/') + 1;
+			var length = eventGridEvent.Subject.LastIndexOf('.') - startIndex;
+			var name = eventGridEvent.Subject.Substring(startIndex, length);
+			var nameParts = name.Split('-');
 			var instanceId = nameParts[0];
 			var eventName = nameParts[1];
 
@@ -54,6 +57,6 @@ namespace FileOrchestrator.Functions
 			{
 				log.LogInformation("Ignoring {eventName} for {instanceId}.", eventName, instanceId);
 			}
-        }
-	}
+		}
+    }
 }
